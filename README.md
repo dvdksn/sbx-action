@@ -1,8 +1,8 @@
 # sbx-action
 
 Run a command in a Docker Sandbox with your repository as its workspace. The
-Action creates an SBX environment, executes your command, and removes the sandbox
-and its scoped secrets when finished.
+Action installs SBX, authenticates Docker, creates an environment, executes your
+command, and removes the sandbox and its scoped secrets when finished.
 
 `run` uses **`sbx env exec`**, executing `bash -lc` without a TTY. Supply the CLI
 and its headless flags explicitly, such as `claude -p "…"`. It does not use
@@ -90,10 +90,11 @@ workspace root must be a Git checkout; edits are discarded during cleanup.
 Additional workspaces retain their SBX mount settings. The Action does not collect
 or publish output.
 
-Docker login is optional if the runner is already authenticated. Login credentials
-are separate from workload `credentials` and are not passed to the sandbox. The
-Action leaves runner authentication in place; use ephemeral runners. Custom kit
-registries may require runner `kit.allowedSources` configuration.
+Provide `docker-username` and `docker-token` through GitHub secrets; the Action
+authenticates with `sbx login --password-stdin`. These inputs are separate from
+workload `credentials` and are not passed to the sandbox. The Action leaves runner
+authentication in place; use ephemeral runners. Custom kit registries may require
+runner `kit.allowedSources` configuration.
 
 Each supplied credential requires an explicit `apiKey.domains` binding and a kit
 that supports that service. Values are masked and supplied through sandbox-scoped
