@@ -1,0 +1,69 @@
+name: SBX task
+description: Run a command in an SBX environment with the workflow checkout as its workspace.
+author: dvdksn
+branding:
+  icon: terminal
+  color: blue
+inputs:
+  sbx-version:
+    description: SBX release to install when absent. Existing installations are reused.
+    default: v0.48.0-rc4
+  docker-username:
+    description: Docker username for sbx login. Provide together with docker-token.
+  docker-token:
+    description: Docker access token for sbx login, supplied through password-stdin.
+  environment-file:
+    description: SBX environment file, relative to the workflow checkout. Mutually exclusive with kit.
+  kit:
+    description: Workload kit OCI reference. Mutually exclusive with environment-file.
+  workspace:
+    description: Host workspace path, relative to github.workspace. Defaults to the checkout.
+    default: .
+  environment-args:
+    description: YAML mapping of declared environment arguments to runtime values. Do not pass secrets here.
+  credentials:
+    description: YAML mapping of SBX service names to secret values. Requires explicit API-key bindings.
+  bindings:
+    description: YAML mapping of service names to SBX credential approvals, merged over environment bindings.
+  allow-host-commands:
+    description: Explicitly permit environment host lifecycle commands and credential resolvers. Trusted files only.
+    default: 'false'
+  clone:
+    description: Use SBX's private Git clone for the primary workspace instead of mounting it writable. Clone edits are discarded on cleanup.
+    default: 'false'
+  run:
+    description: Explicit Bash command executed with sbx env exec, without a TTY. Include the agent CLI and headless flags.
+    required: true
+outputs:
+  sandbox-name:
+    description: Unique sandbox name used for this task (removed after execution).
+    value: ${{ steps.task.outputs.sandbox-name }}
+runs:
+  using: composite
+  steps:
+    - name: Prepare action runtime
+      shell: bash
+      run: |
+        python3 -m venv "$RUNNER_TEMP/sbx-action-python"
+        "$RUNNER_TEMP/sbx-action-python/bin/pip" install --disable-pip-version-check 'PyYAML==6.0.3'
+    - name: Install and authenticate SBX
+      shell: bash
+      env:
+        SBXA_VERSION: ${{ inputs.sbx-version }}
+        SBXA_DOCKER_USERNAME: ${{ inputs.docker-username }}
+        SBXA_DOCKER_TOKEN: ${{ inputs.docker-token }}
+      run: '"$RUNNER_TEMP/sbx-action-python/bin/python" "$GITHUB_ACTION_PATH/src/setup.py"'
+    - name: Run SBX task
+      id: task
+      shell: bash
+      env:
+        SBXA_ENVIRONMENT_FILE: ${{ inputs.environment-file }}
+        SBXA_KIT: ${{ inputs.kit }}
+        SBXA_WORKSPACE: ${{ inputs.workspace }}
+        SBXA_ARGUMENTS: ${{ inputs.environment-args }}
+        SBXA_CREDENTIALS: ${{ inputs.credentials }}
+        SBXA_BINDINGS: ${{ inputs.bindings }}
+        SBXA_ALLOW_HOST_COMMANDS: ${{ inputs.allow-host-commands }}
+        SBXA_CLONE: ${{ inputs.clone }}
+        SBXA_RUN: ${{ inputs.run }}
+      run: '"$RUNNER_TEMP/sbx-action-python/bin/python" "$GITHUB_ACTION_PATH/src/main.py"'
