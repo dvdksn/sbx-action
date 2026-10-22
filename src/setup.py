@@ -1,4 +1,4 @@
-"""Install the tested SBX distribution and optionally authenticate Docker."""
+"""Install the selected SBX distribution and optionally authenticate Docker."""
 import hashlib
 import json
 import os
@@ -11,8 +11,7 @@ import urllib.request
 
 from main import mask
 
-DEFAULT_VERSION = 'v0.48.0-rc4'
-DEFAULT_SHA256 = 'd2a3d90545f7fe242b6bf412ce2afe198cda33f399e2612b91a3418bf13a96e3'
+DEFAULT_VERSION = 'latest'
 ASSET = 'DockerSandboxes-linux-amd64-ubuntu2404.deb'
 
 
@@ -32,23 +31,25 @@ def setup(env, runner=subprocess.run):
         raise ValueError('this action currently supports Linux runners only')
     if not shutil.which('sbx'):
         release = env.get('SBXA_VERSION', DEFAULT_VERSION)
-        if not re.fullmatch(r'v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?', release):
-            raise ValueError('sbx-version must be a release tag such as v0.48.0-rc4')
+        if release != 'latest' and not re.fullmatch(r'v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?', release):
+            raise ValueError('sbx-version must be latest or a release tag such as v0.49.2')
         distro = dict(line.strip().split('=', 1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
         if env.get('RUNNER_ARCH') != 'X64' or distro.get('ID', '').strip('"') != 'ubuntu' or distro.get('VERSION_ID', '').strip('"') != '24.04':
             raise ValueError('automatic SBX installation requires Ubuntu 24.04 x86-64; provision SBX yourself on other Linux runners')
         if not Path('/dev/kvm').is_char_device():
             raise ValueError('SBX requires /dev/kvm; use a runner with hardware virtualization')
         call(['sudo', 'setfacl', '-m', f'u:{os.getuid()}:rw', '/dev/kvm'])
-        digest = DEFAULT_SHA256
-        if release != DEFAULT_VERSION:
-            request = urllib.request.Request(f'https://api.github.com/repos/docker/sbx-releases/releases/tags/{release}', headers={'Accept': 'application/vnd.github+json'})
-            with urllib.request.urlopen(request, timeout=60) as response:
-                assets = json.load(response)['assets']
-            asset = next((a for a in assets if a['name'] == ASSET), {})
-            digest = asset.get('digest', '').removeprefix('sha256:')
-            if not re.fullmatch(r'[a-f0-9]{64}', digest):
-                raise ValueError('SBX release does not provide a SHA256 digest for the Ubuntu 24.04 package')
+        endpoint = 'latest' if release == 'latest' else f'tags/{release}'
+        request = urllib.request.Request(f'https://api.github.com/repos/docker/sbx-releases/releases/{endpoint}', headers={'Accept': 'application/vnd.github+json'})
+        with urllib.request.urlopen(request, timeout=60) as response:
+            metadata = json.load(response)
+        release = metadata['tag_name']
+        if not re.fullmatch(r'v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?', release):
+            raise ValueError('SBX release metadata contains an invalid release tag')
+        asset = next((a for a in metadata['assets'] if a['name'] == ASSET), {})
+        digest = asset.get('digest', '').removeprefix('sha256:')
+        if not re.fullmatch(r'[a-f0-9]{64}', digest):
+            raise ValueError('SBX release does not provide a SHA256 digest for the Ubuntu 24.04 package')
         with tempfile.TemporaryDirectory(prefix='sbx-install-', dir=env['RUNNER_TEMP']) as directory:
             package = Path(directory) / 'sbx.deb'
             with urllib.request.urlopen(f'https://github.com/docker/sbx-releases/releases/download/{release}/{ASSET}', timeout=60) as response, package.open('wb') as output:

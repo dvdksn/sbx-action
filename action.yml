@@ -6,8 +6,8 @@ branding:
   color: blue
 inputs:
   sbx-version:
-    description: SBX release to install when absent. Existing installations are reused.
-    default: v0.48.0-rc4
+    description: SBX release tag or latest stable release to install when absent. Existing installations are reused.
+    default: latest
   docker-username:
     description: Docker username for sbx login. Provide together with docker-token.
   docker-token:

@@ -62,7 +62,7 @@ repository basename.
 
 | Input | Description |
 | --- | --- |
-| `sbx-version` | Release installed when SBX is absent; defaults to `v0.48.0-rc4` |
+| `sbx-version` | Release installed when SBX is absent; defaults to `latest` (latest stable release). Set an explicit tag such as `v0.49.2` to pin |
 | `docker-username` | Docker login username; requires `docker-token` |
 | `docker-token` | Docker access token; requires `docker-username` |
 | `environment-file` | Environment file relative to the checkout; mutually exclusive with `kit` |

@@ -1,6 +1,9 @@
 import contextlib
 import importlib.util
 import io
+import hashlib
+import json
+import tempfile
 import os
 from pathlib import Path
 import sys
@@ -39,3 +42,19 @@ class SetupTest(unittest.TestCase):
             for extra in [{'SBXA_VERSION': '../invalid'}, {'RUNNER_ARCH': 'ARM64'}]:
                 with self.subTest(extra=extra), self.assertRaises(ValueError):
                     setup.setup({'RUNNER_OS': 'Linux', **extra}, lambda *a, **kw: self.fail('must fail before subprocess'))
+
+    def test_latest_and_pinned_releases_verify_resolved_package(self):
+        package = b'sbx package'
+        digest = hashlib.sha256(package).hexdigest()
+        for requested, endpoint in [('latest', 'latest'), ('v0.49.2', 'tags/v0.49.2')]:
+            with self.subTest(requested=requested), tempfile.TemporaryDirectory() as directory:
+                metadata = {'tag_name': 'v0.49.2', 'assets': [{'name': setup.ASSET, 'digest': f'sha256:{digest}'}]}
+                calls = []
+                with patch.object(setup.shutil, 'which', return_value=None), \
+                     patch.object(setup.Path, 'read_text', return_value='ID=ubuntu\nVERSION_ID="24.04"'), \
+                     patch.object(setup.Path, 'is_char_device', return_value=True), \
+                     patch.object(setup.urllib.request, 'urlopen', side_effect=[io.BytesIO(json.dumps(metadata).encode()), io.BytesIO(package)]) as download:
+                    setup.setup({'RUNNER_OS': 'Linux', 'RUNNER_ARCH': 'X64', 'RUNNER_TEMP': directory, 'SBXA_VERSION': requested}, lambda argv, **kw: calls.append(argv))
+                self.assertEqual(download.call_args_list[0].args[0].full_url, f'https://api.github.com/repos/docker/sbx-releases/releases/{endpoint}')
+                self.assertEqual(download.call_args_list[1].args[0], f'https://github.com/docker/sbx-releases/releases/download/v0.49.2/{setup.ASSET}')
+                self.assertIn(['sbx', 'policy', 'init', 'deny-all'], calls)
